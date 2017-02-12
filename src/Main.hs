@@ -7,7 +7,8 @@ import qualified AuthenticationApi  as A
 import qualified LightstreamerApi   as L
 
 import           Lightstreamer      (ConnectionSettings (..),
-                                     SubscriptionMode (..), TableOperation (..))
+                                     SubscriptionMode (..), TableOperation (..),
+                                     TlsSettings (..))
 
 import           Data.List          (isPrefixOf)
 import           System.Environment (getArgs)
@@ -18,8 +19,7 @@ authenticate args =
       >>= \(ev,ak,ar) -> A.authenticate ev ak ar
 
 createConnectionSetting :: A.Hostname -> A.Portnumber -> Bool -> ConnectionSettings
--- createConnectionSetting ip pn True = ConnectionSettings ip pn (Just (TlsSettings True))
-createConnectionSetting ip pn True  = ConnectionSettings ip pn Nothing
+createConnectionSetting ip pn True = ConnectionSettings ip pn (Just (TlsSettings True))
 createConnectionSetting ip pn False = ConnectionSettings ip pn Nothing
 
 connect :: A.AuthenticationResponse -> IO (Maybe L.SessionId)
