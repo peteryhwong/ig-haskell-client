@@ -52,7 +52,7 @@ toRequest un pw = AuthenticationRequest
 toRequestBody :: AuthenticationRequest -> String
 toRequestBody = LBC.unpack.encode
 
-data AuthenticationResponse= AuthenticationResponse
+data AuthenticationResponse = AuthenticationResponse
     { username  :: String
     , token     :: String
     , ipAddress :: Hostname
@@ -60,33 +60,38 @@ data AuthenticationResponse= AuthenticationResponse
     , tls       :: Bool
     } deriving (Show)
 
+-- Check to see if the given string is prefixed with 'https://'
 isTLS :: String -> Bool
-isTLS = isPrefixOf "https"
+isTLS = isPrefixOf "https://"
 
+-- Assume default ports for http and https
 portNumber :: String -> Portnumber
 portNumber endpoint = if isTLS endpoint then 443 else 80
 
+-- Drop the scheme (http:// or https://)
 stripScheme :: String -> Hostname
-stripScheme endpoint = if isTLS endpoint then drop 8 endpoint else drop 7 endpoint
+stripScheme endpoint = drop (if isTLS endpoint then 8 else 7) endpoint
 
+-- Resolves the given endpoint using the system's default /etc/resolv.conf
+-- into IPv4 address, 'Portnumber' and whether
+-- it accepts TLS connection over HTTP
 resolve :: String -> IO (Hostname, Portnumber, Bool)
 resolve endpoint =
     makeResolvSeed defaultResolvConf
       >>= resolve' ((LBC.toStrict.LBC.pack.stripScheme) endpoint)
         >>= \ip -> return (ip, portNumber endpoint, isTLS endpoint)
 
+-- Resolves the given hostname into IPv4 address using the given DNS Resolver seed
 resolve' :: B.ByteString -> ResolvSeed -> IO String
 resolve' hostname seed =
     withResolver seed (`lookupA` hostname)
       >>= either (error.show) (return.show.head)
 
--- Default headers for JSON over HTTP
-defaultHeader :: Options
-defaultHeader = defaults & header "Content-Type" .~ ["application/json"]
-
+-- Include X-IG-API-KEY and Content-Type as HTTP headers
 createHeaders :: ApiKey -> Options
-createHeaders key = defaultHeader & header "X-IG-API-KEY" .~ [strictKey]
+createHeaders key = toHeaders [("X-IG-API-KEY", strictKey), ("Content-Type", "application/json")]
     where strictKey = (LBC.toStrict.LB.packChars) key
+          toHeaders = foldr (\(h,v) hdr -> hdr & header h .~ [v]) defaults
 
 getTopLevelField :: Response LB.ByteString -> T.Text -> String
 getTopLevelField resp name = T.unpack (resp ^. responseBody . key name . _String)
@@ -110,9 +115,13 @@ parseResponse resp =
                 }
           in return response)
 
-authenticate :: Environment -> ApiKey -> AuthenticationRequest -> IO AuthenticationResponse
-authenticate env key auth = postWith (createHeaders key) session (encode auth) >>= parseResponse
-    where session = env ++ "/session"
+authenticate :: Environment
+             -> ApiKey
+             -> AuthenticationRequest
+             -> IO AuthenticationResponse
+authenticate env key auth =
+    let session = env ++ "/session"
+    in postWith (createHeaders key) session (encode auth) >>= parseResponse
 
 parse :: [String] -> Maybe (Environment, ApiKey, AuthenticationRequest)
 parse [env, apiKey, uname, pword] = Just (env, apiKey, toRequest uname pword)

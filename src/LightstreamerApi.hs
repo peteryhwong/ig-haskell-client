@@ -3,8 +3,11 @@
 
 module LightstreamerApi where
 
-import           Lightstreamer
 import           Data.List                (intercalate)
+import           Lightstreamer
+
+-- To handle child threads
+import           GHC.Conc.Sync            (ThreadId)
 
 -- For creating efficient string
 import qualified Data.ByteString.Internal as B
@@ -68,7 +71,11 @@ createStreamRequest   (Just cred) adapter = StreamRequest
     , srUser = Just $ username cred
     }
 
-createTableInfo :: Maybe DataAdapterName -> SubscriptionMode -> ItemGroup -> FieldSchema -> TableInfo
+createTableInfo :: Maybe DataAdapterName
+                -> SubscriptionMode
+                -> ItemGroup
+                -> FieldSchema
+                -> TableInfo
 createTableInfo da sm ig fs = TableInfo
     { tiDataAdapter = da
     , tiId = toTableInfoId ig
@@ -92,15 +99,23 @@ join :: String -> [String] -> B.ByteString
 join sep = B.packChars . intercalate sep
 
 -- Create a 'SubscriptionRequest' for subscription control connections.
-createSubscriptionRequest :: SessionId -> TableName -> TableOperation -> SubscriptionRequest
+createSubscriptionRequest :: SessionId
+                          -> TableName
+                          -> TableOperation
+                          -> SubscriptionRequest
 createSubscriptionRequest = SubscriptionRequest
 
 -- Create a stream connection/session
 -- It returns a 'SessionId', the Lightstreamer Server internal string
 -- representing the Session. This string must be sent with every following
 -- Control Connection.
-connect :: StreamHandler h => ConnectionSettings -> StreamRequest -> h -> IO (Maybe SessionId)
-connect cs sr cl = newStreamConnection cs sr cl >>= either (error.show) (return.Just .sessionId.info)
+connect :: StreamHandler h
+        => ConnectionSettings
+        -> StreamRequest
+        -> h
+        -> IO (ThreadId,SessionId)
+connect cs sr cl = newStreamConnection cs sr cl >>= either (error.show) (return.extract)
+  where extract ctx = (threadId ctx, (sessionId.info) ctx)
 
 -- Table (i.e. subscription) management (creation, activation, deletion).
 -- 'SubscriptionRequest' specifies 'TableOperation'.
