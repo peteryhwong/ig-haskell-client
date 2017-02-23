@@ -15,6 +15,25 @@ import qualified Data.ByteString.Internal as B
 -- For getting command line arguments
 import           System.Environment
 
+
+-- Settings for connecting to a Lightstreamer server
+data LSSetting = LSSetting
+  { lsIP  :: Hostname
+  , lsPN  :: Port
+  , lsTLS :: Bool
+  , lsASN :: AdapterSetName
+  , lsUn  :: Maybe String
+  , lsPW  :: Maybe String
+  } deriving (Show)
+
+  -- Settings for subscribing to a stream
+data Subscription = Subscription
+  { lsFieldNames  :: [String]
+  , lsItemNames   :: [String]
+  , lsTableId     :: B.ByteString
+  , lsDataAdapter :: Maybe B.ByteString
+  } deriving (Show)
+
 type CertificateValidation = Bool
 -- Hostname
 type Hostname = String
@@ -47,15 +66,10 @@ data Credential = Credential
 -- The configured name of a Data Adapters available in the Adapter Set
 type DataAdapterName = B.ByteString
 
--- 'ConnectionListener' receives notifications of connection activity
--- class (StreamHandler h) => ConnectionListener h where
---   streamData :: h -> [StreamItem] -> IO ()
-
--- 'SHandler' receives notifications of connection activity
-data SHandler = SHandler
-
-instance StreamHandler SHandler where
-  streamData _ = print
+-- Create 'StreamRequest' based on the given Lightstreamer setting
+streamRequest :: LSSetting -> StreamRequest
+streamRequest (LSSetting _ _ _ an (Just un) (Just tk)) = createStreamRequest (Just (Credential un tk)) an
+streamRequest (LSSetting _ _ _ an _ _) = createStreamRequest Nothing an
 
 -- Create 'StreamRequest' containing credentials, the name of the Adapter Set
 -- that serves and provides data for this stream connection.)
@@ -105,17 +119,28 @@ createSubscriptionRequest :: SessionId
                           -> SubscriptionRequest
 createSubscriptionRequest = SubscriptionRequest
 
+connect :: StreamHandler h => LSSetting -> h -> IO SessionId
+connect (LSSetting ip pn tls aName un tk) h =
+  let sreq = streamRequest (LSSetting ip pn tls aName un tk)
+      csetting = connectionSetting ip pn tls
+  in connect' csetting sreq h
+
 -- Create a stream connection/session
 -- It returns a 'SessionId', the Lightstreamer Server internal string
 -- representing the Session. This string must be sent with every following
 -- Control Connection.
-connect :: StreamHandler h
+connect' :: StreamHandler h
         => ConnectionSettings
         -> StreamRequest
         -> h
-        -> IO (ThreadId,SessionId)
-connect cs sr cl = newStreamConnection cs sr cl >>= either (error.show) (return.extract)
-  where extract ctx = (threadId ctx, (sessionId.info) ctx)
+        -> IO SessionId
+connect' cs sr cl = newStreamConnection cs sr cl
+  >>= either (error.show) (return.sessionId.info)
+
+-- Create 'ConnectionSettings'
+connectionSetting :: Hostname -> Port -> Bool -> ConnectionSettings
+connectionSetting ip pn True = ConnectionSettings ip pn (Just (TlsSettings True))
+connectionSetting ip pn False = ConnectionSettings ip pn Nothing
 
 -- Table (i.e. subscription) management (creation, activation, deletion).
 -- 'SubscriptionRequest' specifies 'TableOperation'.
@@ -125,3 +150,19 @@ connect cs sr cl = newStreamConnection cs sr cl >>= either (error.show) (return.
 -- 'TableDelete' deletes the specified table.
 control :: ConnectionSettings -> SubscriptionRequest -> IO()
 control cs sr = subscribe cs sr >>= either (error.show) (\x -> return ())
+
+subscribeToStream :: LSSetting -> Subscription -> SessionId -> IO ()
+subscribeToStream (LSSetting ip pn tls _ _ _) sub sid =
+  let itemgroup = ItemNames (lsFieldNames sub)
+      fieldSchema = FieldNames (lsItemNames sub)
+      tableInfo = createTableInfo (lsDataAdapter sub) Merge itemgroup fieldSchema
+      request = createSubscriptionRequest sid (lsTableId sub) (TableAdd tableInfo)
+  in control (connectionSetting ip pn tls) request
+
+connectAndSubscribe :: StreamHandler h
+                    => LSSetting
+                    -> h
+                    -> Subscription
+                    -> IO()
+connectAndSubscribe stg handler sub =
+  connect stg handler >>= subscribeToStream stg sub
