@@ -21,26 +21,24 @@ import           System.Environment       (getArgs)
 
 -- To handle child threads
 import           Control.Concurrent.MVar
-import           Control.Monad            (when)
-import           GHC.Conc.Sync
 
 -- This encapsulates a 'MVar' for communicating with the thread
 -- receiving lightStreamer subscription
-newtype StatefulHandler = StatefulHandler { streamEnd :: MVar() }
+newtype StatefulHandler = StatefulHandler { notice :: MVar() }
 
 -- 'StatefulHandler' implements 'StreamHandler' such that when stream is
 -- being closed, the internal 'MVar' is supplied with an empty value to notify
 -- that the program can terminate
 instance StreamHandler StatefulHandler where
   streamData _ = print
-  streamClosed handler = putMVar (streamEnd handler) ()
+  streamClosed handler = putMVar (notice handler) ()
 
 -- Connect to lightStreamer server and subscribe according to 'Subscription'
 -- this function uses 'StatefulHandler' (an implementation of 'StreamHandler')
 -- to wait and get notification about 'streamClosed'.
 lightStreamer :: L.Subscription -> L.LSSetting -> IO()
 lightStreamer sub stg = fmap StatefulHandler newEmptyMVar
-  >>= (\handler -> L.connectAndSubscribe stg handler sub >> (takeMVar.streamEnd) handler)
+  >>= (\handler -> L.connectAndSubscribe stg handler sub >> (takeMVar.notice) handler)
 
 authenticate :: [String] -> IO A.AuthenticationResponse
 authenticate args =
@@ -64,15 +62,15 @@ exampleLightStreamerSetting = L.LSSetting
   , L.lsPN  = 80
   , L.lsTLS = False
   , L.lsASN = "WELCOME"
-  , L.lsUn  = Nothing
-  , L.lsPW  = Nothing
+  , L.lsUsername = Nothing
+  , L.lsPassword  = Nothing
   }
 
 -- Example Subscription described in the Lightstreamer Network Protocol Tutorial
 exampleSubscription :: L.Subscription
 exampleSubscription = L.Subscription
-  { L.lsFieldNames  = ["item2", "item11", "item18"]
-  , L.lsItemNames   = ["last_price", "time", "pct_change", "bid_quantity", "bid", "ask", "ask_quantity", "min", "max", "ref_price", "open_price"]
+  { L.lsItemNames   = ["item2"]
+  , L.lsFieldNames  = ["bid", "ask", "min", "max", "time"]
   , L.lsTableId     = "2"
   , L.lsDataAdapter = Just "STOCKS"
   }
@@ -80,8 +78,8 @@ exampleSubscription = L.Subscription
 -- Example IG Lightstreamer Subscription
 createIgSubscription :: String -> L.Subscription
 createIgSubscription epic = L.Subscription
-  { L.lsFieldNames  = [epic]
-  , L.lsItemNames   = ["BID", "OFFER", "HIGH", "LOW"]
+  { L.lsItemNames   = [epic]
+  , L.lsFieldNames  = ["BID", "OFFER", "HIGH", "LOW"]
   , L.lsTableId     = "1"
   , L.lsDataAdapter = Nothing
   }

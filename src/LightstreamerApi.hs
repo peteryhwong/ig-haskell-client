@@ -18,12 +18,12 @@ import           System.Environment
 
 -- Settings for connecting to a Lightstreamer server
 data LSSetting = LSSetting
-  { lsIP  :: Hostname
-  , lsPN  :: Port
-  , lsTLS :: Bool
-  , lsASN :: AdapterSetName
-  , lsUn  :: Maybe String
-  , lsPW  :: Maybe String
+  { lsIP       :: Hostname
+  , lsPN       :: Port
+  , lsTLS      :: Bool
+  , lsASN      :: AdapterSetName
+  , lsUsername :: Maybe String
+  , lsPassword :: Maybe String
   } deriving (Show)
 
   -- Settings for subscribing to a stream
@@ -122,8 +122,7 @@ createSubscriptionRequest = SubscriptionRequest
 connect :: StreamHandler h => LSSetting -> h -> IO SessionId
 connect (LSSetting ip pn tls aName un tk) h =
   let sreq = streamRequest (LSSetting ip pn tls aName un tk)
-      csetting = connectionSetting ip pn tls
-  in connect' csetting sreq h
+  in connect' (connectionSetting ip pn tls) sreq h
 
 -- Create a stream connection/session
 -- It returns a 'SessionId', the Lightstreamer Server internal string
@@ -153,12 +152,14 @@ control cs sr = subscribe cs sr >>= either (error.show) (\x -> return ())
 
 subscribeToStream :: LSSetting -> Subscription -> SessionId -> IO ()
 subscribeToStream (LSSetting ip pn tls _ _ _) sub sid =
-  let itemgroup = ItemNames (lsFieldNames sub)
-      fieldSchema = FieldNames (lsItemNames sub)
+  let itemgroup = ItemNames (lsItemNames sub)
+      fieldSchema = FieldNames (lsFieldNames sub)
       tableInfo = createTableInfo (lsDataAdapter sub) Merge itemgroup fieldSchema
       request = createSubscriptionRequest sid (lsTableId sub) (TableAdd tableInfo)
   in control (connectionSetting ip pn tls) request
 
+-- Connects to the specified Lightstreamer server and subscribe according
+-- to 'Subscription'.
 connectAndSubscribe :: StreamHandler h
                     => LSSetting
                     -> h
