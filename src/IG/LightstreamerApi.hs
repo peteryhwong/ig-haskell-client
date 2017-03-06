@@ -1,7 +1,7 @@
 -- making string literals polymorphic over the 'IsString' type class
 {-# LANGUAGE OverloadedStrings #-}
 
-module LightstreamerApi where
+module IG.LightstreamerApi where
 
 import           Data.List                (intercalate)
 import           Lightstreamer
@@ -16,7 +16,7 @@ import qualified Data.ByteString.Internal as B
 import           System.Environment
 
 
--- Settings for connecting to a Lightstreamer server
+-- | Settings for connecting to a Lightstreamer server
 data LSSetting = LSSetting
   { lsIP       :: Hostname
   , lsPN       :: Port
@@ -26,7 +26,7 @@ data LSSetting = LSSetting
   , lsPassword :: Maybe String
   } deriving (Show)
 
-  -- Settings for subscribing to a stream
+-- | Settings for subscribing to a stream
 data Subscription = Subscription
   { lsFieldNames  :: [String]
   , lsItemNames   :: [String]
@@ -35,43 +35,43 @@ data Subscription = Subscription
   } deriving (Show)
 
 type CertificateValidation = Bool
--- Hostname
+-- | Hostname
 type Hostname = String
--- Port number
+-- | Port number
 type Port = Int
--- Session Id
+-- | Session Id
 type SessionId = B.ByteString
--- logical name that identifies the Adapter Set
+-- | Logical name that identifies the Adapter Set
 type AdapterSetName = String
--- Progressive identification number of the Table to which
+-- | Progressive identification number of the Table to which
 -- the operation specified by 'TableInfo' applies.
 type TableName = B.ByteString
--- A set of field names that have been subscribed to by a Client in relation to
+-- | A set of field names that have been subscribed to by a Client in relation to
 -- an item. A 'FieldSchema' is identified either by an array of field names or by
 -- a unique string that should be known to the Client and to the Metadata
 -- Adapter.
 data FieldSchema = FieldNames [String] | SchemaName String
--- A set of items subscribed to by a Client with a common field schema and a
+-- | A set of items subscribed to by a Client with a common field schema and a
 -- common supplier Data Adapter. An 'ItemGroup' is identified either by an array
 -- of item names or by a unique name that should be known to the Client and to
 -- the Metadata Adapter.
 data ItemGroup = ItemNames [String] | GroupName String
 
--- Credential for authenticating against the
+-- | Credential for authenticating against the
 data Credential = Credential
   { username :: String
   , password :: String
   }
 
--- The configured name of a Data Adapters available in the Adapter Set
+-- | The configured name of a Data Adapters available in the Adapter Set
 type DataAdapterName = B.ByteString
 
--- Create 'StreamRequest' based on the given Lightstreamer setting
+-- | Create 'StreamRequest' based on the given Lightstreamer setting
 streamRequest :: LSSetting -> StreamRequest
 streamRequest (LSSetting _ _ _ an (Just un) (Just tk)) = createStreamRequest (Just (Credential un tk)) an
 streamRequest (LSSetting _ _ _ an _ _) = createStreamRequest Nothing an
 
--- Create 'StreamRequest' containing credentials, the name of the Adapter Set
+-- | Create 'StreamRequest' containing credentials, the name of the Adapter Set
 -- that serves and provides data for this stream connection.)
 createStreamRequest :: Maybe Credential -> AdapterSetName -> StreamRequest
 createStreamRequest   Nothing     adapter = defaultStreamRequest adapter
@@ -112,7 +112,7 @@ toTableInfoSchema (FieldNames ns) = join "+" ns
 join :: String -> [String] -> B.ByteString
 join sep = B.packChars . intercalate sep
 
--- Create a 'SubscriptionRequest' for subscription control connections.
+-- | Create a 'SubscriptionRequest' for subscription control connections.
 createSubscriptionRequest :: SessionId
                           -> TableName
                           -> TableOperation
@@ -124,7 +124,7 @@ connect (LSSetting ip pn tls aName un tk) h =
   let sreq = streamRequest (LSSetting ip pn tls aName un tk)
   in connect' (connectionSetting ip pn tls) sreq h
 
--- Create a stream connection/session
+-- | Create a stream connection/session
 -- It returns a 'SessionId', the Lightstreamer Server internal string
 -- representing the Session. This string must be sent with every following
 -- Control Connection.
@@ -136,12 +136,12 @@ connect' :: StreamHandler h
 connect' cs sr cl = newStreamConnection cs sr cl
   >>= either (error.show) (return.sessionId.info)
 
--- Create 'ConnectionSettings'
+-- | Create 'ConnectionSettings'
 connectionSetting :: Hostname -> Port -> Bool -> ConnectionSettings
 connectionSetting ip pn True = ConnectionSettings ip pn (Just (TlsSettings True))
 connectionSetting ip pn False = ConnectionSettings ip pn Nothing
 
--- Table (i.e. subscription) management (creation, activation, deletion).
+-- | Table (i.e. subscription) management (creation, activation, deletion).
 -- 'SubscriptionRequest' specifies 'TableOperation'.
 -- 'TableAdd' creates and activate a new table.
 -- 'TableAddSilent' creates a new table (without sending realtime updates).
@@ -158,7 +158,7 @@ subscribeToStream (LSSetting ip pn tls _ _ _) sub sid =
       request = createSubscriptionRequest sid (lsTableId sub) (TableAdd tableInfo)
   in control (connectionSetting ip pn tls) request
 
--- Connects to the specified Lightstreamer server and subscribe according
+-- | Connects to the specified Lightstreamer server and subscribe according
 -- to 'Subscription'.
 connectAndSubscribe :: StreamHandler h
                     => LSSetting

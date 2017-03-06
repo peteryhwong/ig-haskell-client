@@ -5,7 +5,7 @@
 -- implementations.
 {-# LANGUAGE DeriveGeneric     #-}
 
-module AuthenticationApi where
+module IG.AuthenticationApi where
 
 -- For processing HTTP JSON response
 import           Control.Lens
@@ -34,6 +34,7 @@ type ApiKey = String
 type Hostname = String
 type Portnumber = Int
 
+-- | AuthenticationRequest
 data AuthenticationRequest = AuthenticationRequest
     { identifier        :: String
     , password          :: String
@@ -60,19 +61,19 @@ data AuthenticationResponse = AuthenticationResponse
     , tls       :: Bool
     } deriving (Show)
 
--- Check to see if the given string is prefixed with 'https://'
+-- | Check to see if the given string is prefixed with 'https://'
 isTLS :: String -> Bool
 isTLS = isPrefixOf "https://"
 
--- Assume default ports for http and https
+-- | Assume default ports for http and https
 portNumber :: String -> Portnumber
 portNumber endpoint = if isTLS endpoint then 443 else 80
 
--- Drop the scheme (http:// or https://)
+-- | Drop the scheme (http:// or https://)
 stripScheme :: String -> Hostname
 stripScheme endpoint = drop (if isTLS endpoint then 8 else 7) endpoint
 
--- Resolves the given endpoint using the system's default /etc/resolv.conf
+-- | Resolves the given endpoint using the system's default /etc/resolv.conf
 -- into IPv4 address, 'Portnumber' and whether
 -- it accepts TLS connection over HTTP
 resolve :: String -> IO (Hostname, Portnumber, Bool)
@@ -81,13 +82,13 @@ resolve endpoint =
       >>= resolve' ((LBC.toStrict.LBC.pack.stripScheme) endpoint)
         >>= \ip -> return (ip, portNumber endpoint, isTLS endpoint)
 
--- Resolves the given hostname into IPv4 address using the given DNS Resolver seed
+-- | Resolves the given hostname into IPv4 address using the given DNS Resolver seed
 resolve' :: B.ByteString -> ResolvSeed -> IO String
 resolve' hostname seed =
     withResolver seed (`lookupA` hostname)
       >>= either (error.show) (return.show.head)
 
--- Include X-IG-API-KEY and Content-Type as HTTP headers
+-- | Include X-IG-API-KEY and Content-Type as HTTP headers
 createHeaders :: ApiKey -> Options
 createHeaders key = toHeaders [("X-IG-API-KEY", strictKey), ("Content-Type", "application/json")]
     where strictKey = (LBC.toStrict.LB.packChars) key
